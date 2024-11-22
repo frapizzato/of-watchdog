@@ -6,6 +6,7 @@ package executor
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 
@@ -232,7 +233,8 @@ func copyHeaders(destination http.Header, source *http.Header) {
 func makeProxyClient(dialTimeout time.Duration) *http.Client {
 	proxyClient := http.Client{
 		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
+			Proxy:           http.ProxyFromEnvironment,
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			DialContext: (&net.Dialer{
 				Timeout:   dialTimeout,
 				KeepAlive: 10 * time.Second,

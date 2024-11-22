@@ -7,10 +7,10 @@ ifneq ($(GIT_UNTRACKEDCHANGES),)
 endif
 LDFLAGS := "-s -w -X main.Version=$(GIT_VERSION) -X main.GitCommit=$(GIT_COMMIT)"
 
-SERVER?=ghcr.io
-OWNER?=openfaas
+SERVER?=docker.io
+OWNER?=fpizzato
 IMG_NAME?=of-watchdog
-TAG?=$(GIT_VERSION)
+TAG?=dev-latest
 
 export GOFLAGS=-mod=vendor
 
