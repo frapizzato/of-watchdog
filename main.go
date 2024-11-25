@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
@@ -111,12 +112,20 @@ func main() {
 	cancel := make(chan bool)
 
 	go metricsServer.Serve(cancel)
+	// EXTENSION FOR TLS:
+	cert, err := tls.LoadX509KeyPair("./server.crt", "./server.key")
+	if err != nil {
+		log.Fatalf("Error loading certificate: %s", err.Error())
+	}
+
+	tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
 
 	s := &http.Server{
 		Addr:           fmt.Sprintf(":%d", watchdogConfig.TCPPort),
 		ReadTimeout:    watchdogConfig.HTTPReadTimeout,
 		WriteTimeout:   watchdogConfig.HTTPWriteTimeout,
 		MaxHeaderBytes: 1 << 20, // Max header of 1MB
+		TLSConfig:      tlsConfig,
 	}
 
 	log.Printf("Timeouts: read: %s write: %s hard: %s health: %s\n",
@@ -185,7 +194,8 @@ func listenUntilShutdown(s *http.Server, healthcheckInterval time.Duration, writ
 
 	// Run the HTTP server in a separate go-routine.
 	go func() {
-		if err := s.ListenAndServe(); err != http.ErrServerClosed {
+		//if err := s.ListenAndServe(); err != http.ErrServerClosed {
+		if err := s.ListenAndServeTLS("", ""); err != http.ErrServerClosed {
 			log.Printf("Error ListenAndServe: %v", err)
 			close(idleConnsClosed)
 		}
