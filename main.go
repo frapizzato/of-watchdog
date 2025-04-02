@@ -106,26 +106,45 @@ func main() {
 		limiter:         limit,
 	})
 
+	// Creates, with a separate go-routine, a TLS server for functions
+	TLSPort := 8888 // <-- modify this as needed!
+	tlsMux := http.NewServeMux()
+	tlsMux.HandleFunc("/", metrics.InstrumentHandler(requestHandler, httpMetrics))
+	cert, err := tls.LoadX509KeyPair("./server.crt", "./server.key")
+	if err != nil {
+		log.Fatalf("Error loading TLS certificate: %s", err.Error())
+	}
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+
+	tlsServer := &http.Server{
+		Addr:           fmt.Sprintf(":%d", TLSPort),
+		ReadTimeout:    watchdogConfig.HTTPReadTimeout,
+		WriteTimeout:   watchdogConfig.HTTPWriteTimeout,
+		MaxHeaderBytes: 1 << 20, // Max header of 1MB
+		Handler:        tlsMux,
+		TLSConfig:      tlsConfig,
+	}
+
+	go func() {
+		if err := tlsServer.ListenAndServeTLS("", ""); err != http.ErrServerClosed {
+			log.Printf("Error ListenAndServe: %v", err)
+		}
+	}()
+
 	metricsServer := metrics.MetricsServer{}
 	metricsServer.Register(watchdogConfig.MetricsPort)
 
 	cancel := make(chan bool)
 
 	go metricsServer.Serve(cancel)
-	// EXTENSION FOR TLS:
-	cert, err := tls.LoadX509KeyPair("./server.crt", "./server.key")
-	if err != nil {
-		log.Fatalf("Error loading certificate: %s", err.Error())
-	}
-
-	tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
 
 	s := &http.Server{
 		Addr:           fmt.Sprintf(":%d", watchdogConfig.TCPPort),
 		ReadTimeout:    watchdogConfig.HTTPReadTimeout,
 		WriteTimeout:   watchdogConfig.HTTPWriteTimeout,
 		MaxHeaderBytes: 1 << 20, // Max header of 1MB
-		TLSConfig:      tlsConfig,
 	}
 
 	log.Printf("Timeouts: read: %s write: %s hard: %s health: %s\n",
@@ -194,8 +213,7 @@ func listenUntilShutdown(s *http.Server, healthcheckInterval time.Duration, writ
 
 	// Run the HTTP server in a separate go-routine.
 	go func() {
-		//if err := s.ListenAndServe(); err != http.ErrServerClosed {
-		if err := s.ListenAndServeTLS("", ""); err != http.ErrServerClosed {
+		if err := s.ListenAndServe(); err != http.ErrServerClosed {
 			log.Printf("Error ListenAndServe: %v", err)
 			close(idleConnsClosed)
 		}
